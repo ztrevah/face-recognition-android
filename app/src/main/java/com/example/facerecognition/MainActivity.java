@@ -21,8 +21,10 @@ import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
+import androidx.annotation.OptIn;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.camera.core.CameraSelector;
+import androidx.camera.core.ExperimentalGetImage;
 import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageProxy;
 import androidx.camera.core.Preview;
@@ -226,7 +228,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                 });
 
-                CameraSelector cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA;
+                CameraSelector cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA;
 
                 cameraProvider.unbindAll();
                 cameraProvider.bindToLifecycle((LifecycleOwner) this, cameraSelector, preview, imageAnalysis);
@@ -238,6 +240,7 @@ public class MainActivity extends AppCompatActivity {
         }, ContextCompat.getMainExecutor(this));
     }
 
+    @OptIn(markerClass = ExperimentalGetImage.class)
     private void detectFacesAndRecognize(ImageProxy imageProxy) {
         InputImage inputImage = null;
         try {
@@ -283,9 +286,9 @@ public class MainActivity extends AppCompatActivity {
                                     float[] currentEmbedding = getFaceEmbedding(faceBitmap);
                                     if (currentEmbedding != null) {
                                         if (comparedFaceEmbedding != null) {
-                                            float similarity = calculateCosineSimilarity(currentEmbedding, comparedFaceEmbedding);
-                                            Log.d(TAG, "Face Similarity: " + similarity);
-                                            if (similarity >= 0.7f) { // Adjust threshold as needed
+                                            float distance = calculateDistance(currentEmbedding, comparedFaceEmbedding);
+                                            Log.d(TAG, "Face distance: " + distance);
+                                            if (distance <= 1.0f) { // Adjust threshold as needed
                                                 // UI updates must be on the main thread
                                                 runOnUiThread(() -> {
                                                     Toast.makeText(MainActivity.this, "Face Matched!", Toast.LENGTH_SHORT).show();

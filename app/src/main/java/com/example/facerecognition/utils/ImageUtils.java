@@ -22,7 +22,7 @@ public class ImageUtils {
 
     private static final String TAG = "ImageUtils";
 
-    public static Bitmap imageProxyToBitmap(ImageProxy imageProxy) {
+    public static Bitmap imageProxyToBitmap(ImageProxy imageProxy) throws Exception {
         Bitmap bitmap = null;
         switch (imageProxy.getFormat()) {
             case ImageFormat.YUV_420_888:
@@ -32,6 +32,8 @@ public class ImageUtils {
                 bitmap = jpegToBitmap(imageProxy);
                 break;
             // Add handling for other formats if needed
+            default:
+                throw new Exception("Unsupported format");
         }
         if(bitmap != null) {
             bitmap = rotateBitmap(bitmap, imageProxy.getImageInfo().getRotationDegrees());
@@ -70,15 +72,75 @@ public class ImageUtils {
         return BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
     }
 
+    public static Bitmap uriToBitmap(Context context, Uri imageUri) throws IOException {
+        if (context == null || imageUri == null) {
+            return null;
+        }
+
+        ContentResolver contentResolver = context.getContentResolver();
+        InputStream inputStream = null;
+        Bitmap bitmap = null;
+        // First, decode the bitmap
+        inputStream = contentResolver.openInputStream(imageUri);
+        if (inputStream != null) {
+            bitmap = BitmapFactory.decodeStream(inputStream);
+            // Close the stream after decoding, as we might open another for Exif
+            inputStream.close();
+            inputStream = null; // Set to null to avoid closing again in finally
+        }
+
+        // If bitmap was decoded successfully, read Exif orientation
+        if (bitmap != null) {
+            inputStream = contentResolver.openInputStream(imageUri); // Open a new stream for ExifInterface
+            if (inputStream != null) {
+                ExifInterface exifInterface = new ExifInterface(inputStream);
+                int orientation = exifInterface.getAttributeInt(
+                        ExifInterface.TAG_ORIENTATION,
+                        ExifInterface.ORIENTATION_NORMAL);
+
+                int rotationDegrees = 0;
+                switch (orientation) {
+                    case ExifInterface.ORIENTATION_ROTATE_90:
+                        rotationDegrees = 90;
+                        break;
+                    case ExifInterface.ORIENTATION_ROTATE_180:
+                        rotationDegrees = 180;
+                        break;
+                    case ExifInterface.ORIENTATION_ROTATE_270:
+                        rotationDegrees = 270;
+                        break;
+                    default:
+                        break;
+                }
+                bitmap = rotateBitmap(bitmap, rotationDegrees);
+            }
+        }
+        if (inputStream != null) {
+            inputStream.close();
+        }
+
+        return bitmap;
+    }
+
     public static Bitmap rotateBitmap(Bitmap bitmap, int rotationDegrees) {
         if (rotationDegrees == 0) return bitmap;
+
         Matrix matrix = new Matrix();
         matrix.postRotate(rotationDegrees);
-        Bitmap rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
-        if (rotatedBitmap != bitmap) {
-            bitmap.recycle();
-        }
-        return rotatedBitmap;
+        // Create a new bitmap with the rotation applied
+        Bitmap rotatedBitmap = Bitmap.createBitmap(
+                bitmap,
+                0,
+                0,
+                bitmap.getWidth(),
+                bitmap.getHeight(),
+                matrix,
+                true // Filter to smooth the rotation
+        );
+        // Recycle the original bitmap to free up memory
+        bitmap.recycle();
+        bitmap = rotatedBitmap; // Use the rotated bitmap
+        return bitmap;
     }
 
     public static Bitmap cropBitmap(Bitmap bitmap, Rect rect) {
@@ -127,73 +189,5 @@ public class ImageUtils {
         return imgData;
     }
 
-    public static Bitmap uriToBitmap(Context context, Uri imageUri) throws IOException {
-        if (context == null || imageUri == null) {
-            return null;
-        }
 
-        ContentResolver contentResolver = context.getContentResolver();
-        InputStream inputStream = null;
-        Bitmap bitmap = null;
-        // First, decode the bitmap
-        inputStream = contentResolver.openInputStream(imageUri);
-        if (inputStream != null) {
-            bitmap = BitmapFactory.decodeStream(inputStream);
-            // Close the stream after decoding, as we might open another for Exif
-            inputStream.close();
-            inputStream = null; // Set to null to avoid closing again in finally
-        }
-
-        // If bitmap was decoded successfully, read Exif orientation
-        if (bitmap != null) {
-            inputStream = contentResolver.openInputStream(imageUri); // Open a new stream for ExifInterface
-            if (inputStream != null) {
-                ExifInterface exifInterface = new ExifInterface(inputStream);
-                int orientation = exifInterface.getAttributeInt(
-                        ExifInterface.TAG_ORIENTATION,
-                        ExifInterface.ORIENTATION_NORMAL);
-
-                int rotationDegrees = 0;
-                switch (orientation) {
-                    case ExifInterface.ORIENTATION_ROTATE_90:
-                        rotationDegrees = 90;
-                        break;
-                    case ExifInterface.ORIENTATION_ROTATE_180:
-                        rotationDegrees = 180;
-                        break;
-                    case ExifInterface.ORIENTATION_ROTATE_270:
-                        rotationDegrees = 270;
-                        break;
-                    default:
-                        break;
-                }
-
-                // Apply rotation if needed
-                if (rotationDegrees != 0) {
-                    Matrix matrix = new Matrix();
-                    matrix.postRotate(rotationDegrees);
-
-                    // Create a new bitmap with the rotation applied
-                    Bitmap rotatedBitmap = Bitmap.createBitmap(
-                            bitmap,
-                            0,
-                            0,
-                            bitmap.getWidth(),
-                            bitmap.getHeight(),
-                            matrix,
-                            true // Filter to smooth the rotation
-                    );
-
-                    // Recycle the original bitmap to free up memory
-                    bitmap.recycle();
-                    bitmap = rotatedBitmap; // Use the rotated bitmap
-                }
-            }
-        }
-        if (inputStream != null) {
-            inputStream.close();
-        }
-
-        return bitmap;
-    }
 }
